@@ -14,6 +14,7 @@ import click
 
 from notebooklm import NotebookLMClient, AuthError, NotebookLMError
 from notebooklm.cli.helpers import (
+    clear_context,
     get_current_notebook,
     set_current_notebook,
     get_current_conversation,
@@ -143,6 +144,38 @@ async def create(title):
             nb = await c.notebooks.create(title)
         set_current_notebook(nb.id, title=nb.title)
         click.echo(f"Created: {nb.title}  ({nb.id[:8]})")
+
+
+# ── delete ────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("notebook_id", required=False)
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+@async_cmd
+async def delete(notebook_id, yes):
+    """Delete a notebook by ID (or the current notebook if omitted)."""
+    async with client() as c:
+        with spinner("Fetching notebooks"):
+            notebooks = await c.notebooks.list()
+        nb_id = notebook_id or get_current_notebook()
+        if not nb_id:
+            click.echo("No notebook specified and none selected. Run: ntbklm use ID", err=True)
+            sys.exit(1)
+        match = next(
+            (nb for nb in notebooks if nb.id.startswith(nb_id)),
+            None,
+        )
+        if not match:
+            click.echo(f"No notebook matching '{nb_id}'.", err=True)
+            sys.exit(1)
+        if not yes:
+            click.confirm(f"Delete \"{match.title}\" ({match.id[:8]})?", abort=True)
+        with spinner("Deleting notebook"):
+            await c.notebooks.delete(match.id)
+        if get_current_notebook() == match.id:
+            clear_context()
+        click.echo(f"Deleted: {match.title}  ({match.id[:8]})")
 
 
 # ── use ──────────────────────────────────────────────────────────────────────
