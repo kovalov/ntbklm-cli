@@ -8,14 +8,12 @@ Built on top of [notebooklm-py](https://github.com/teng-lin/notebooklm-py).
 
 ```bash
 pipx install git+https://github.com/kovalov/ntbklm-cli.git
-playwright install chromium
 ```
 
 Or with pip:
 
 ```bash
 pip install git+https://github.com/kovalov/ntbklm-cli.git
-playwright install chromium
 ```
 
 ## Quick start

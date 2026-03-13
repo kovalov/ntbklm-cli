@@ -2,6 +2,7 @@
 
 import asyncio
 import functools
+import subprocess
 import sys
 from pathlib import Path
 
@@ -66,6 +67,12 @@ def cli():
 @click.pass_context
 def login(ctx):
     """Authenticate with Google (opens browser)."""
+    # Auto-install Chromium if missing (uses pipx venv's own Python)
+    subprocess.run(
+        [sys.executable, "-m", "playwright", "install", "chromium"],
+        check=True,
+    )
+
     from notebooklm.cli.session import register_session_commands
 
     @click.group()
