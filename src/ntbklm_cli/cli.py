@@ -2,8 +2,12 @@
 
 import asyncio
 import functools
+import itertools
 import subprocess
 import sys
+import threading
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import click
@@ -16,6 +20,29 @@ from notebooklm.cli.helpers import (
     set_current_conversation,
     require_notebook,
 )
+
+
+@contextmanager
+def spinner(message):
+    """Show an animated spinner while work is in progress."""
+    stop = threading.Event()
+    frames = itertools.cycle(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
+
+    def _spin():
+        while not stop.is_set():
+            sys.stderr.write(f"\r{next(frames)} {message}...")
+            sys.stderr.flush()
+            time.sleep(0.08)
+
+    t = threading.Thread(target=_spin, daemon=True)
+    t.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        t.join()
+        sys.stderr.write(f"\r\033[2K")
+        sys.stderr.flush()
 
 
 def async_cmd(fn):
@@ -91,7 +118,8 @@ def login(ctx):
 async def list_notebooks():
     """List all notebooks."""
     async with client() as c:
-        notebooks = await c.notebooks.list()
+        with spinner("Fetching notebooks"):
+            notebooks = await c.notebooks.list()
         current = get_current_notebook()
         if not notebooks:
             click.echo("No notebooks found.")
@@ -111,7 +139,8 @@ async def list_notebooks():
 async def create(title):
     """Create a new notebook and set it as current."""
     async with client() as c:
-        nb = await c.notebooks.create(title)
+        with spinner("Creating notebook"):
+            nb = await c.notebooks.create(title)
         set_current_notebook(nb.id, title=nb.title)
         click.echo(f"Created: {nb.title}  ({nb.id[:8]})")
 
@@ -149,15 +178,15 @@ async def add(source):
     nb_id = current_notebook()
     async with client() as c:
         if source.startswith(("http://", "https://")):
-            click.echo(f"Adding URL: {source}")
-            src = await c.sources.add_url(nb_id, source, wait=True)
+            with spinner(f"Adding URL: {source}"):
+                src = await c.sources.add_url(nb_id, source, wait=True)
         else:
             path = Path(source).expanduser().resolve()
             if not path.exists():
                 click.echo(f"File not found: {source}", err=True)
                 sys.exit(1)
-            click.echo(f"Adding file: {path.name}")
-            src = await c.sources.add_file(nb_id, str(path), wait=True)
+            with spinner(f"Adding file: {path.name}"):
+                src = await c.sources.add_file(nb_id, str(path), wait=True)
         click.echo(f"Added: {src.title}  ({src.id[:8]})")
 
 
@@ -172,7 +201,8 @@ async def ask(question):
     nb_id = current_notebook()
     conv_id = get_current_conversation()
     async with client() as c:
-        result = await c.chat.ask(nb_id, question, conversation_id=conv_id)
+        with spinner("Thinking"):
+            result = await c.chat.ask(nb_id, question, conversation_id=conv_id)
         set_current_conversation(result.conversation_id)
         click.echo(result.answer)
 
@@ -186,7 +216,9 @@ async def summary():
     """Get an AI summary of the current notebook."""
     nb_id = current_notebook()
     async with client() as c:
-        click.echo(await c.notebooks.get_summary(nb_id))
+        with spinner("Generating summary"):
+            text = await c.notebooks.get_summary(nb_id)
+        click.echo(text)
 
 
 # ── sources ──────────────────────────────────────────────────────────────────
@@ -198,7 +230,8 @@ async def sources():
     """List sources in the current notebook."""
     nb_id = current_notebook()
     async with client() as c:
-        srcs = await c.sources.list(nb_id)
+        with spinner("Fetching sources"):
+            srcs = await c.sources.list(nb_id)
         if not srcs:
             click.echo("No sources in this notebook.")
             return
