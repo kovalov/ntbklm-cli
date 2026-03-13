@@ -2,8 +2,6 @@
 
 import asyncio
 import functools
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -65,13 +63,17 @@ def cli():
 
 
 @cli.command()
-def login():
+@click.pass_context
+def login(ctx):
     """Authenticate with Google (opens browser)."""
-    notebooklm_bin = shutil.which("notebooklm")
-    if not notebooklm_bin:
-        click.echo("'notebooklm' not found. Install: pip install notebooklm-py", err=True)
-        sys.exit(1)
-    subprocess.run([notebooklm_bin, "login"])
+    from notebooklm.cli.session import register_session_commands
+
+    @click.group()
+    def _tmp():
+        pass
+
+    register_session_commands(_tmp)
+    ctx.invoke(_tmp.commands["login"])
 
 
 # ── list ─────────────────────────────────────────────────────────────────────
